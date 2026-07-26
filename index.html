@@ -215,6 +215,12 @@ const CONFIG = {
     volume: 50          //    그 순간부터의 볼륨 (0~100)
   },
 
+  timing: {              // ⏱ 문구 등장 속도 (단위: 초). 숫자를 키우면 더 천천히!
+    fadeIn: 2.4,         //    문장 하나가 서서히 나타나는 데 걸리는 시간
+    lineGap: 2.6,        //    한 문장이 나타난 뒤 다음 문장이 나타나기까지의 간격
+    sceneFade: 1.8       //    장면이 바뀔 때 이전 문장들이 사라지는 시간
+  },
+
   scenes: [
     {
       sky: 0,            // 0 = 깊은 밤, 1 = 새벽 꽃밭 (0.5 = 여명)
@@ -723,10 +729,19 @@ const CONFIG = {
   let advancing = false;
   let finished = false;
 
+  /* CONFIG.timing(초)을 ms로 변환. 기기의 '애니메이션 줄이기' 설정과
+     무관하게 항상 설정값 그대로 동작하도록 고정 */
+  const T = {
+    fadeIn: (CONFIG.timing?.fadeIn ?? 1.6) * 1000,
+    lineGap: (CONFIG.timing?.lineGap ?? 1.4) * 1000,
+    sceneFade: (CONFIG.timing?.sceneFade ?? 1.4) * 1000
+  };
+
   function makeLine(item) {
     const div = document.createElement("div");
     div.className = "line" + (item && item.small ? " small" : "");
     div.textContent = typeof item === "string" ? item : item.text;
+    div.style.transitionDuration = T.fadeIn + "ms";
     return div;
   }
 
@@ -764,9 +779,9 @@ const CONFIG = {
 
       /* 한 줄씩 시간차로 등장 */
       els.forEach((el, i) => {
-        setTimeout(() => el.classList.add("show"), 300 + i * (reduceMotion ? 250 : 1400));
+        setTimeout(() => el.classList.add("show"), 300 + i * T.lineGap);
       });
-      const doneAt = 300 + els.length * (reduceMotion ? 250 : 1400) + 400;
+      const doneAt = 300 + els.length * T.lineGap + 400;
       setTimeout(() => {
         advancing = false;
         if (scene.final) {
@@ -778,7 +793,7 @@ const CONFIG = {
           }
         }
       }, doneAt);
-    }, sceneIndex === 0 && idx === 0 ? 0 : 1400);
+    }, sceneIndex === 0 && idx === 0 ? 0 : T.sceneFade);
   }
 
   function showReply(lines) {
@@ -790,9 +805,9 @@ const CONFIG = {
       const els = all.map(makeLine);
       els.forEach((el) => stage.appendChild(el));
       els.forEach((el, i) => {
-        setTimeout(() => el.classList.add("show"), 300 + i * (reduceMotion ? 250 : 1400));
+        setTimeout(() => el.classList.add("show"), 300 + i * T.lineGap);
       });
-    }, 1400);
+    }, T.sceneFade);
   }
 
   function advance() {
