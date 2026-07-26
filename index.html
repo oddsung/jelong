@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>재롱님께, 별이 내리는 밤에</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #f5efe6;
+    --ink-dim: rgba(245, 239, 230, 0.55);
+    --accent: #ffd9a0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: #070b1e;
+    font-family: 'Gowun Batang', 'Nanum Myeongjo', serif;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  #sky {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  /* ---------- 텍스트 오버레이 ---------- */
+  #stage {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 8vh 8vw 14vh;
+    cursor: pointer;
+    z-index: 2;
+  }
+  .line {
+    color: var(--ink);
+    font-size: clamp(19px, 4.6vw, 27px);
+    line-height: 1.9;
+    letter-spacing: 0.02em;
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity 1.6s ease, transform 1.6s ease;
+    text-shadow: 0 2px 24px rgba(0, 0, 0, 0.45);
+    max-width: 34ch;
+    word-break: keep-all;
+    margin: 0.35em 0;
+  }
+  .line.small {
+    font-size: clamp(14px, 3.4vw, 17px);
+    color: var(--ink-dim);
+  }
+  .line.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  #hint {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: max(4.5vh, env(safe-area-inset-bottom));
+    text-align: center;
+    color: rgba(245, 239, 230, 0.45);
+    font-size: 13px;
+    letter-spacing: 0.22em;
+    z-index: 2;
+    pointer-events: none;
+    animation: breathe 3.2s ease-in-out infinite;
+    transition: opacity 0.8s ease;
+  }
+  @keyframes breathe {
+    0%, 100% { opacity: 0.35; }
+    50% { opacity: 0.85; }
+  }
+  /* ---------- 마지막 선택 버튼 ---------- */
+  #choices {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 5vh;
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity 1.6s ease 0.6s, transform 1.6s ease 0.6s;
+    pointer-events: none;
+  }
+  #choices.show {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+  .choice {
+    font-family: inherit;
+    font-size: clamp(15px, 3.8vw, 18px);
+    color: var(--ink);
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(245, 239, 230, 0.35);
+    border-radius: 999px;
+    padding: 14px 34px;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    transition: background 0.5s ease, border-color 0.5s ease, transform 0.3s ease;
+    letter-spacing: 0.03em;
+  }
+  .choice:hover, .choice:focus-visible {
+    background: rgba(255, 217, 160, 0.18);
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+  .choice:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+  #from {
+    position: fixed;
+    right: 5vw;
+    bottom: max(4.5vh, env(safe-area-inset-bottom));
+    color: rgba(245, 239, 230, 0.5);
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    z-index: 2;
+    opacity: 0;
+    transition: opacity 2s ease 1s;
+    pointer-events: none;
+  }
+  #from.show { opacity: 1; }
+  /* ---------- 시작 오버레이 ---------- */
+  #intro {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 22px;
+    background: rgba(7, 11, 30, 0.55);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    z-index: 5;
+    transition: opacity 1.4s ease;
+  }
+  #intro.hide {
+    opacity: 0;
+    pointer-events: none;
+  }
+  #intro p {
+    color: var(--ink-dim);
+    font-size: clamp(14px, 3.6vw, 16px);
+    letter-spacing: 0.14em;
+  }
+  #introBtn {
+    font-family: inherit;
+    font-size: clamp(16px, 4.2vw, 19px);
+    color: var(--ink);
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(245, 239, 230, 0.4);
+    border-radius: 999px;
+    padding: 16px 38px;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    letter-spacing: 0.04em;
+    transition: background 0.5s ease, border-color 0.5s ease, transform 0.3s ease;
+    animation: breathe 3.2s ease-in-out infinite;
+  }
+  #introBtn:hover, #introBtn:focus-visible {
+    background: rgba(255, 217, 160, 0.18);
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    animation: none;
+    opacity: 1;
+  }
+  #introBtn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .line, #choices { transition-duration: 0.4s; }
+    #hint { animation: none; opacity: 0.6; }
+  }
+</style>
+</head>
+<body>
+
+<audio id="bgm" src="Until_I_Found_You.mp3" loop preload="auto"></audio>
+<canvas id="sky"></canvas>
+<div id="stage" aria-live="polite"></div>
+<div id="hint" style="display: none;">화면을 살짝 눌러 주세요</div>
+<div id="from"></div>
+<div id="intro">
+  <button id="introBtn" type="button">🎵 별빛 아래에서 시작하기</button>
+  <!-- <p>이어폰을 끼면 더 좋아요</p> -->
+</div>
+
+<script>
+/* =====================================================================
+   ✏️ CONFIG — 이 부분만 수정하면 나만의 페이지가 됩니다
+   ===================================================================== */
+const CONFIG = {
+  fromName: "",          // 보내는 사람 이름. 비워두면 표시되지 않아요. 예: "— 민준 드림"
+  bgmVolume: 25,         // 🎵 배경음악 볼륨 (0~100). 0 = 무음, 100 = 최대
+  bgmHighlight: {        // 🎵 "좋아요" 버튼을 누르면 곡의 하이라이트로 점프해요
+    seekTo: "1:34",      //    점프할 재생 위치 ("분:초" 또는 초 단위 숫자)
+    volume: 50          //    그 순간부터의 볼륨 (0~100)
+  },
+
+  scenes: [
+    {
+      sky: 0,            // 0 = 깊은 밤, 1 = 새벽 꽃밭 (0.5 = 여명)
+      lines: [
+        "안녕하세요, 재롱님.",
+        "잠깐, 이 밤하늘 좀 보고 가실래요?",
+        { text: "손끝을 움직이면, 별들이 따라와요.", small: true }
+      ]
+    },
+    {
+      sky: 0,
+      lines: [
+        "별을 보다가 문득 그런 생각을 했어요.",
+        "누군가를 알아간다는 건",
+        "별자리를 잇는 일과 닮았다고요.",
+        { text: "하나씩, 천천히, 서두르지 않고요.", small: true }
+      ]
+    },
+    {
+      sky: 0.55,
+      lines: [
+        "솔직히 말하면,",
+        "재롱님이 어떤 사람인지 궁금해졌어요.",
+        "어떤 계절을 좋아하는지,",
+        "어떤 꽃을 좋아하는지.",
+        "어떤 이야기에 웃음을 짓는지,"
+      ]
+    },
+    {
+      sky: 1,
+      lines: [
+        "부담은 갖지 않으셨으면 해요.",
+        "그냥, 서로가 어떤 사람인지",
+        "조금씩 알아가는 시간을 가져보면 어떨까 해요.",
+        { text: "차 한 잔의 속도로, 천천히요.", small: true },
+        { text: "편하게 마음 가는 데로 답해주세요.", small: true }
+      ],
+      final: true        // 마지막 장면: 선택 버튼이 나타납니다
+    }
+  ],
+  showChoices: false,    // 마지막 선택 버튼 표시 여부. true로 바꾸면 다시 나타나요
+  choices: [
+    {
+      label: "좋아요, 천천히 알아가요",
+      reply: ["고마워요.", "설레는 마음으로, 곧 연락드릴게요."],
+      highlight: true    // 이 버튼을 누르면 bgmHighlight 연출 실행
+    },
+    {
+      label: "조금 생각해볼게요",
+      reply: ["충분히 천천히 생각하셔도 괜찮아요.", "어떤 답이든, 그대로 존중할게요."]
+    }
+  ],
+  closing: { text: "이 밤하늘은 언제든 다시 열어볼 수 있어요.", small: true }
+};
+
+/* =====================================================================
+   아래는 연출 코드입니다 (수정하지 않아도 동작해요)
+   ===================================================================== */
+(() => {
+  "use strict";
+
+  const canvas = document.getElementById("sky");
+  const ctx = canvas.getContext("2d");
+  const stage = document.getElementById("stage");
+  const hint = document.getElementById("hint");
+  const fromEl = document.getElementById("from");
+  const bgm = document.getElementById("bgm");
+
+  /* ---------- 배경음악 ----------
+     볼륨은 CONFIG.bgmVolume(0~100)에서 조절하세요.
+     체감(로그) 보정을 거쳐 실제 출력 게인으로 변환됩니다. */
+  const percentToGain = (p) => Math.pow(Math.max(0, Math.min(100, p)) / 100, 2.5);
+  const parseTime = (v) => {
+    if (typeof v === "number") return v;
+    const parts = String(v).split(":").map(Number);
+    return parts.length === 2 ? parts[0] * 60 + parts[1] : parts[0] || 0;
+  };
+  let audioCtx = null;
+  let bgmGain = null;
+  function setBgmVolume(percent) {
+    const g = percentToGain(percent);
+    if (bgmGain) {
+      /* 급격한 볼륨 점프로 인한 '뚝' 소리를 막기 위해 0.3초에 걸쳐 변경 */
+      bgmGain.gain.cancelScheduledValues(audioCtx.currentTime);
+      bgmGain.gain.setValueAtTime(bgmGain.gain.value, audioCtx.currentTime);
+      bgmGain.gain.linearRampToValueAtTime(g, audioCtx.currentTime + 0.3);
+    } else {
+      bgm.volume = g;
+    }
+  }
+  function startBgm() {
+    if (!bgm.paused) return;
+    /* file://로 직접 열면 브라우저가 Web Audio 경로를 무음 처리하므로
+       volume 속성을 사용. 웹서버 배포 시에만 GainNode 사용(iOS 볼륨 대응). */
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const useWebAudio = AC && location.protocol !== "file:";
+    if (useWebAudio && !audioCtx) {
+      audioCtx = new AC();
+      const src = audioCtx.createMediaElementSource(bgm);
+      bgmGain = audioCtx.createGain();
+      bgmGain.gain.value = percentToGain(CONFIG.bgmVolume);
+      src.connect(bgmGain).connect(audioCtx.destination);
+    } else if (!useWebAudio) {
+      bgm.volume = percentToGain(CONFIG.bgmVolume);
+    }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    bgm.play().catch(() => {});
+  }
+  /* "좋아요" 선택 시: 곡의 하이라이트 지점으로 점프 + 볼륨 상승 */
+  function playHighlight() {
+    const hl = CONFIG.bgmHighlight;
+    if (!hl) return;
+    bgm.currentTime = parseTime(hl.seekTo);
+    setBgmVolume(hl.volume);
+    if (bgm.paused) bgm.play().catch(() => {});
+  }
+
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  let W = 0, H = 0, DPR = 1;
+  let stars = [];
+  let flowers = [];
+  let driftPetals = [];
+  let sparkles = [];
+  let shootingStars = [];
+  let nextShootAt = 0;
+
+  const mouse = { x: -9999, y: -9999, active: false };
+
+  /* 하늘 전환 상태: 0 = 밤, 1 = 새벽 꽃밭 */
+  let skyMix = 0;
+  let skyTarget = 0;
+
+  /* ---------- 유틸 ---------- */
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const clamp01 = (v) => Math.max(0, Math.min(1, v));
+
+  function lerpColor(c1, c2, t) {
+    return [
+      Math.round(lerp(c1[0], c2[0], t)),
+      Math.round(lerp(c1[1], c2[1], t)),
+      Math.round(lerp(c1[2], c2[2], t))
+    ];
+  }
+  const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+
+  /* ---------- 팔레트 ---------- */
+  const NIGHT_TOP = [7, 11, 30];
+  const NIGHT_MID = [22, 30, 68];
+  const NIGHT_BOT = [42, 47, 92];
+  const DAWN_TOP  = [83, 96, 168];
+  const DAWN_MID  = [216, 148, 158];
+  const DAWN_BOT  = [255, 205, 158];
+
+  const PETAL_COLORS = [
+    [247, 168, 196], // 분홍
+    [195, 177, 225], // 라벤더
+    [255, 214, 214], // 살구빛
+    [250, 240, 222], // 미색
+    [255, 183, 155]  // 코랄
+  ];
+
+  /* ---------- 초기화 ---------- */
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * DPR;
+    canvas.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    buildStars();
+    buildFlowers();
+  }
+
+  function buildStars() {
+    const count = Math.round((W * H) / 5200);
+    stars = [];
+    for (let i = 0; i < count; i++) {
+      stars.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        r: rand(0.4, 1.7),
+        base: rand(0.25, 0.9),
+        phase: rand(0, Math.PI * 2),
+        speed: rand(0.4, 1.4),
+        ox: 0, oy: 0            // 마우스 반응 오프셋
+      });
+    }
+  }
+
+  function buildFlowers() {
+    const count = Math.max(14, Math.round(W / 46));
+    flowers = [];
+    for (let i = 0; i < count; i++) {
+      const x = (i + rand(0.15, 0.85)) * (W / count);
+      const h = rand(H * 0.10, H * 0.24);
+      flowers.push({
+        x,
+        baseY: H + rand(2, 26),
+        h,
+        size: rand(9, 17),
+        petals: Math.random() < 0.5 ? 5 : 6,
+        color: PETAL_COLORS[Math.floor(Math.random() * PETAL_COLORS.length)],
+        phase: rand(0, Math.PI * 2),
+        stiff: rand(0.7, 1.3),   // 바람에 흔들리는 정도
+        bend: 0,                  // 마우스 반응 굽힘 (부드럽게 수렴)
+        glow: 0                   // 마우스 근접 시 은은한 빛
+      });
+    }
+    /* 앞줄 꽃이 뒷줄을 가리도록 키 순 정렬 */
+    flowers.sort((a, b) => a.h - b.h);
+  }
+
+  /* ---------- 입력 ---------- */
+  function setMouse(x, y) {
+    mouse.x = x; mouse.y = y; mouse.active = true;
+    /* 밤 장면: 손끝을 따라 반짝임을 흩뿌림 */
+    if (!reduceMotion && skyMix < 0.6 && Math.random() < 0.35) {
+      sparkles.push({
+        x: x + rand(-6, 6), y: y + rand(-6, 6),
+        vx: rand(-0.3, 0.3), vy: rand(-0.55, -0.1),
+        life: 1, r: rand(0.6, 1.8)
+      });
+    }
+  }
+  window.addEventListener("pointermove", (e) => setMouse(e.clientX, e.clientY), { passive: true });
+  window.addEventListener("pointerdown", (e) => setMouse(e.clientX, e.clientY), { passive: true });
+  window.addEventListener("pointerleave", () => { mouse.active = false; mouse.x = -9999; mouse.y = -9999; });
+  window.addEventListener("touchmove", (e) => {
+    const t = e.touches[0];
+    if (t) setMouse(t.clientX, t.clientY);
+  }, { passive: true });
+
+  /* ---------- 그리기 ---------- */
+  function drawSky(t) {
+    const top = lerpColor(NIGHT_TOP, DAWN_TOP, skyMix);
+    const mid = lerpColor(NIGHT_MID, DAWN_MID, skyMix);
+    const bot = lerpColor(NIGHT_BOT, DAWN_BOT, skyMix);
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, rgba(top, 1));
+    g.addColorStop(0.62, rgba(mid, 1));
+    g.addColorStop(1, rgba(bot, 1));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    /* 새벽: 지평선의 따스한 햇무리 */
+    if (skyMix > 0.05) {
+      const sunX = W * 0.5, sunY = H * 1.06;
+      const rad = Math.max(W, H) * 0.85;
+      const sg = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, rad);
+      sg.addColorStop(0, `rgba(255, 226, 178, ${0.55 * skyMix})`);
+      sg.addColorStop(0.4, `rgba(255, 196, 160, ${0.22 * skyMix})`);
+      sg.addColorStop(1, "rgba(255, 196, 160, 0)");
+      ctx.fillStyle = sg;
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  function drawStars(t) {
+    const fade = 1 - skyMix * 0.92;
+    if (fade <= 0.02) return;
+    for (const s of stars) {
+      const tw = reduceMotion ? 0.8 : 0.62 + 0.38 * Math.sin(t * s.speed + s.phase);
+      let a = s.base * tw * fade;
+      let r = s.r;
+
+      /* 마우스 근접 → 별이 밝아지고 살짝 다가옴 */
+      const dx = mouse.x - (s.x + s.ox);
+      const dy = mouse.y - (s.y + s.oy);
+      const d2 = dx * dx + dy * dy;
+      const R = 150;
+      let tx = 0, ty = 0;
+      if (mouse.active && d2 < R * R) {
+        const d = Math.sqrt(d2) || 1;
+        const k = 1 - d / R;
+        a = Math.min(1, a + k * 0.85);
+        r = s.r + k * 1.6;
+        tx = (dx / d) * k * 14;
+        ty = (dy / d) * k * 14;
+      }
+      s.ox += (tx - s.ox) * 0.06;
+      s.oy += (ty - s.oy) * 0.06;
+
+      const x = s.x + s.ox, y = s.y + s.oy;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 248, 231, ${a.toFixed(3)})`;
+      ctx.fill();
+
+      /* 큰 별에는 십자 광채 */
+      if (r > 1.9 && a > 0.5) {
+        ctx.strokeStyle = `rgba(255, 248, 231, ${(a * 0.35).toFixed(3)})`;
+        ctx.lineWidth = 0.7;
+        const L = r * 3.4;
+        ctx.beginPath();
+        ctx.moveTo(x - L, y); ctx.lineTo(x + L, y);
+        ctx.moveTo(x, y - L); ctx.lineTo(x, y + L);
+        ctx.stroke();
+      }
+    }
+  }
+
+  function spawnShootingStar(t) {
+    shootingStars.push({
+      x: rand(W * 0.15, W * 0.9),
+      y: rand(H * 0.05, H * 0.35),
+      vx: -rand(5, 8),
+      vy: rand(2.2, 3.6),
+      life: 1
+    });
+    nextShootAt = t + rand(5, 11);
+  }
+
+  function drawShootingStars(t) {
+    if (reduceMotion || skyMix > 0.4) return;
+    if (t > nextShootAt) spawnShootingStar(t);
+    for (let i = shootingStars.length - 1; i >= 0; i--) {
+      const s = shootingStars[i];
+      s.x += s.vx; s.y += s.vy; s.life -= 0.016;
+      if (s.life <= 0) { shootingStars.splice(i, 1); continue; }
+      const tail = 16;
+      const g = ctx.createLinearGradient(s.x, s.y, s.x - s.vx * tail, s.y - s.vy * tail);
+      g.addColorStop(0, `rgba(255, 250, 235, ${0.9 * s.life})`);
+      g.addColorStop(1, "rgba(255, 250, 235, 0)");
+      ctx.strokeStyle = g;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(s.x - s.vx * tail, s.y - s.vy * tail);
+      ctx.stroke();
+    }
+  }
+
+  function drawSparkles() {
+    for (let i = sparkles.length - 1; i >= 0; i--) {
+      const p = sparkles[i];
+      p.x += p.vx; p.y += p.vy; p.life -= 0.02;
+      if (p.life <= 0) { sparkles.splice(i, 1); continue; }
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 234, 190, ${0.8 * p.life})`;
+      ctx.fill();
+    }
+  }
+
+  /* 바람: 위치와 시간에 따른 부드러운 파동 */
+  function wind(t, x) {
+    if (reduceMotion) return 0;
+    return Math.sin(t * 0.9 + x * 0.006) * 0.075
+         + Math.sin(t * 0.33 + x * 0.013) * 0.05;
+  }
+
+  function drawFlower(f, t) {
+    const sway = wind(t, f.x) * f.stiff + f.bend;
+    const tipX = f.x + Math.sin(sway) * f.h * 0.55;
+    const tipY = f.baseY - f.h;
+    const ctrlX = f.x + Math.sin(sway) * f.h * 0.18;
+    const ctrlY = f.baseY - f.h * 0.55;
+
+    /* 줄기 */
+    ctx.strokeStyle = `rgba(96, 128, 96, ${0.9 * skyMix})`;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(f.x, f.baseY);
+    ctx.quadraticCurveTo(ctrlX, ctrlY, tipX, tipY);
+    ctx.stroke();
+
+    /* 잎사귀 */
+    ctx.fillStyle = `rgba(110, 148, 108, ${0.75 * skyMix})`;
+    const leafY = f.baseY - f.h * 0.4;
+    const leafX = f.x + Math.sin(sway) * f.h * 0.1;
+    ctx.save();
+    ctx.translate(leafX, leafY);
+    ctx.rotate(sway * 0.6 - 0.7);
+    ctx.beginPath();
+    ctx.ellipse(f.size * 0.55, 0, f.size * 0.62, f.size * 0.22, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    /* 꽃송이: 마우스가 가까우면 은은하게 빛남 */
+    if (f.glow > 0.02) {
+      const gg = ctx.createRadialGradient(tipX, tipY, 0, tipX, tipY, f.size * 3.2);
+      gg.addColorStop(0, rgba(f.color, 0.35 * f.glow * skyMix));
+      gg.addColorStop(1, rgba(f.color, 0));
+      ctx.fillStyle = gg;
+      ctx.beginPath();
+      ctx.arc(tipX, tipY, f.size * 3.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.save();
+    ctx.translate(tipX, tipY);
+    ctx.rotate(sway * 0.5 + (reduceMotion ? 0 : Math.sin(t * 0.5 + f.phase) * 0.05));
+    const pr = f.size * (1 + f.glow * 0.12);
+    for (let i = 0; i < f.petals; i++) {
+      const ang = (i / f.petals) * Math.PI * 2;
+      ctx.save();
+      ctx.rotate(ang);
+      ctx.beginPath();
+      ctx.ellipse(pr * 0.62, 0, pr * 0.66, pr * 0.34, 0, 0, Math.PI * 2);
+      ctx.fillStyle = rgba(f.color, (0.88 + f.glow * 0.12) * skyMix);
+      ctx.fill();
+      ctx.restore();
+    }
+    /* 꽃술 */
+    ctx.beginPath();
+    ctx.arc(0, 0, pr * 0.3, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255, 219, 140, ${0.95 * skyMix})`;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function updateFlowers(t) {
+    if (skyMix < 0.03) return;
+    for (const f of flowers) {
+      /* 마우스가 꽃 근처를 지나면 살짝 물러나며 반짝임 */
+      const tipY = f.baseY - f.h;
+      const dx = (f.x - mouse.x);
+      const dy = (tipY - mouse.y);
+      const d2 = dx * dx + dy * dy;
+      const R = 130;
+      let targetBend = 0, targetGlow = 0;
+      if (mouse.active && d2 < R * R) {
+        const d = Math.sqrt(d2) || 1;
+        const k = 1 - d / R;
+        targetBend = (dx >= 0 ? 1 : -1) * k * 0.45;
+        targetGlow = k;
+        if (!reduceMotion && Math.random() < k * 0.12) {
+          driftPetals.push({
+            x: f.x + rand(-8, 8), y: tipY + rand(-8, 4),
+            vx: rand(0.15, 0.6), vy: rand(-0.35, -0.05),
+            rot: rand(0, Math.PI * 2), vr: rand(-0.03, 0.03),
+            color: f.color, life: 1, size: rand(2.4, 4.2)
+          });
+        }
+      }
+      f.bend += (targetBend - f.bend) * 0.07;
+      f.glow += (targetGlow - f.glow) * 0.08;
+      drawFlower(f, t);
+    }
+  }
+
+  /* 바람에 실려 떠다니는 꽃잎 */
+  function drawDriftPetals(t) {
+    if (skyMix < 0.03) return;
+    /* 은은하게 배경에서 계속 흩날리는 꽃잎 */
+    if (!reduceMotion && driftPetals.length < 26 && Math.random() < 0.05 * skyMix) {
+      driftPetals.push({
+        x: rand(-30, W * 0.4), y: rand(H * 0.2, H * 0.85),
+        vx: rand(0.25, 0.7), vy: rand(-0.12, 0.18),
+        rot: rand(0, Math.PI * 2), vr: rand(-0.02, 0.02),
+        color: PETAL_COLORS[Math.floor(Math.random() * PETAL_COLORS.length)],
+        life: 1, size: rand(2.2, 4.4)
+      });
+    }
+    for (let i = driftPetals.length - 1; i >= 0; i--) {
+      const p = driftPetals[i];
+      p.x += p.vx + Math.sin(t + p.rot) * 0.18;
+      p.y += p.vy + Math.cos(t * 0.7 + p.rot) * 0.1;
+      p.rot += p.vr;
+      p.life -= 0.0035;
+      if (p.life <= 0 || p.x > W + 40) { driftPetals.splice(i, 1); continue; }
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, p.size, p.size * 0.55, 0, 0, Math.PI * 2);
+      ctx.fillStyle = rgba(p.color, 0.55 * p.life * skyMix);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  /* ---------- 루프 ---------- */
+  let start = performance.now();
+  function frame(now) {
+    const t = (now - start) / 1000;
+    skyMix += (skyTarget - skyMix) * (reduceMotion ? 0.06 : 0.012);
+    skyMix = clamp01(skyMix);
+
+    ctx.clearRect(0, 0, W, H);
+    drawSky(t);
+    drawStars(t);
+    drawShootingStars(t);
+    drawSparkles();
+    drawDriftPetals(t);
+    updateFlowers(t);
+
+    requestAnimationFrame(frame);
+  }
+
+  /* =====================================================================
+     장면 진행 (텍스트)
+     ===================================================================== */
+  let sceneIndex = -1;
+  let advancing = false;
+  let finished = false;
+
+  function makeLine(item) {
+    const div = document.createElement("div");
+    div.className = "line" + (item && item.small ? " small" : "");
+    div.textContent = typeof item === "string" ? item : item.text;
+    return div;
+  }
+
+  function showScene(idx) {
+    const scene = CONFIG.scenes[idx];
+    if (!scene) return;
+    advancing = true;
+    skyTarget = scene.sky;
+
+    /* 이전 문장 서서히 사라짐 */
+    [...stage.children].forEach((el) => el.classList.remove("show"));
+    setTimeout(() => {
+      stage.innerHTML = "";
+      const els = scene.lines.map(makeLine);
+      els.forEach((el) => stage.appendChild(el));
+
+      let choicesEl = null;
+      if (scene.final && CONFIG.showChoices) {
+        choicesEl = document.createElement("div");
+        choicesEl.id = "choices";
+        CONFIG.choices.forEach((c) => {
+          const btn = document.createElement("button");
+          btn.className = "choice";
+          btn.type = "button";
+          btn.textContent = c.label;
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (c.highlight) playHighlight();
+            showReply(c.reply);
+          });
+          choicesEl.appendChild(btn);
+        });
+        stage.appendChild(choicesEl);
+      }
+
+      /* 한 줄씩 시간차로 등장 */
+      els.forEach((el, i) => {
+        setTimeout(() => el.classList.add("show"), 300 + i * (reduceMotion ? 250 : 1400));
+      });
+      const doneAt = 300 + els.length * (reduceMotion ? 250 : 1400) + 400;
+      setTimeout(() => {
+        advancing = false;
+        if (scene.final) {
+          hint.style.opacity = "0";
+          if (choicesEl) choicesEl.classList.add("show");
+          if (CONFIG.fromName) {
+            fromEl.textContent = CONFIG.fromName;
+            fromEl.classList.add("show");
+          }
+        }
+      }, doneAt);
+    }, sceneIndex === 0 && idx === 0 ? 0 : 1400);
+  }
+
+  function showReply(lines) {
+    finished = true;
+    [...stage.children].forEach((el) => el.classList.remove("show"));
+    setTimeout(() => {
+      stage.innerHTML = "";
+      const all = [...lines, CONFIG.closing];
+      const els = all.map(makeLine);
+      els.forEach((el) => stage.appendChild(el));
+      els.forEach((el, i) => {
+        setTimeout(() => el.classList.add("show"), 300 + i * (reduceMotion ? 250 : 1400));
+      });
+    }, 1400);
+  }
+
+  function advance() {
+    if (advancing || finished) return;
+    const next = sceneIndex + 1;
+    if (next >= CONFIG.scenes.length) return;
+    sceneIndex = next;
+    if (CONFIG.scenes[sceneIndex] && CONFIG.scenes[sceneIndex].final) {
+      /* 마지막 장면 도달: 힌트 숨김은 showScene에서 처리 */
+    }
+    showScene(sceneIndex);
+  }
+
+  stage.addEventListener("click", advance);
+  window.addEventListener("keydown", (e) => {
+    if (e.key === " " || e.key === "Enter" || e.key === "ArrowRight") advance();
+  });
+
+  /* ---------- 시작 ---------- */
+  window.addEventListener("resize", resize);
+  resize();
+  requestAnimationFrame(frame);
+
+  /* 시작 버튼: 음악과 함께 첫 장면을 엽니다 */
+  const intro = document.getElementById("intro");
+  const introBtn = document.getElementById("introBtn");
+  introBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    startBgm();
+    intro.classList.add("hide");
+    hint.style.display = "";
+    setTimeout(advance, 600);
+  }, { once: true });
+})();
+</script>
+</body>
+</html>
