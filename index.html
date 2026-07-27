@@ -56,6 +56,11 @@
     word-break: keep-all;
     margin: 0.35em 0;
   }
+  /* nowrap: 줄바꿈 없이 한 줄로 (넘치면 JS가 글자 크기를 줄여 맞춤) */
+  .line.nowrap {
+    max-width: none;
+    white-space: nowrap;
+  }
   .line.small {
     font-size: clamp(14px, 3.4vw, 17px);
     color: var(--ink-dim);
@@ -64,23 +69,74 @@
     opacity: 1;
     transform: translateY(0);
   }
+  /* 넘김 표시: 반짝이는 별 + 터치 리플처럼 퍼지는 물결 */
   #hint {
     position: fixed;
-    left: 0;
-    right: 0;
+    left: 50%;
     bottom: max(4.5vh, env(safe-area-inset-bottom));
-    text-align: center;
-    color: rgba(245, 239, 230, 0.45);
-    font-size: 13px;
-    letter-spacing: 0.22em;
+    transform: translateX(-50%);
+    width: 56px;
+    height: 56px;
     z-index: 2;
-    pointer-events: none;
-    animation: breathe 3.2s ease-in-out infinite;
+    cursor: pointer;
     transition: opacity 0.8s ease;
+  }
+  #hint .tap-star {
+    position: absolute;
+    inset: 0;
+    margin: auto;             /* 56px 박스 정중앙에 배치 → 확대/축소 기준점 = 별의 중심 */
+    width: 20px;
+    height: 20px;
+    color: rgba(255, 236, 200, 0.9);
+    filter: drop-shadow(0 0 6px rgba(255, 217, 160, 0.75));
+    animation: starPulse 2.4s ease-in-out infinite;
+  }
+  #hint .tap-ripple {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: 44px;
+    height: 44px;
+    border: 1px solid rgba(255, 236, 200, 0.5);
+    border-radius: 50%;
+    opacity: 0;
+    animation: tapRipple 2.4s ease-out infinite;
+  }
+  #hint .tap-ripple.r2 { animation-delay: 1.2s; }
+  /* 마우스를 올리면 별이 강하게 반짝임 */
+  #hint:hover .tap-star {
+    animation: starSparkle 1.8s ease-in-out infinite;
+    color: rgba(255, 244, 220, 1);
+    filter:
+      drop-shadow(0 0 8px rgba(255, 227, 170, 0.95))
+      drop-shadow(0 0 16px rgba(255, 217, 160, 0.6));
+  }
+  #hint:hover .tap-ripple {
+    border-color: rgba(255, 236, 200, 0.85);
+    animation-duration: 2s;
+  }
+  #hint:hover .tap-ripple.r2 { animation-delay: 1s; }
+  @keyframes starSparkle {
+    0%, 100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    50% { transform: scale(1.5) rotate(20deg); opacity: 0.8; }
+  }
+  @keyframes starPulse {
+    0%, 100% { transform: scale(0.85); opacity: 0.55; }
+    50% { transform: scale(1.15); opacity: 1; }
+  }
+  @keyframes tapRipple {
+    0% { transform: scale(0.25); opacity: 0.65; }
+    70%, 100% { transform: scale(1); opacity: 0; }
   }
   @keyframes breathe {
     0%, 100% { opacity: 0.35; }
     50% { opacity: 0.85; }
+  }
+  /* 문장이 모두 나타나기 전에는 힌트 숨김 (숨김 중엔 클릭도 통과) */
+  #hint.hidden {
+    animation: none;
+    opacity: 0;
+    pointer-events: none;
   }
   /* ---------- 마지막 선택 버튼 ---------- */
   #choices {
@@ -187,7 +243,8 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .line, #choices { transition-duration: 0.4s; }
-    #hint { animation: none; opacity: 0.6; }
+    #hint .tap-star { animation: none; opacity: 0.85; }
+    #hint .tap-ripple { animation: none; opacity: 0.25; transform: scale(0.8); }
   }
 </style>
 </head>
@@ -196,7 +253,13 @@
 <audio id="bgm" src="Until_I_Found_You.mp3" loop preload="auto"></audio>
 <canvas id="sky"></canvas>
 <div id="stage" aria-live="polite"></div>
-<div id="hint" style="display: none;">화면을 살짝 눌러 주세요</div>
+<div id="hint" class="hidden" style="display: none;" role="img" aria-label="화면을 살짝 눌러 주세요">
+  <span class="tap-ripple r1"></span>
+  <span class="tap-ripple r2"></span>
+  <svg class="tap-star" viewBox="0 0 24 24" aria-hidden="true">
+    <path fill="currentColor" d="M12 0 C12.9 6.5 17.5 11.1 24 12 C17.5 12.9 12.9 17.5 12 24 C11.1 17.5 6.5 12.9 0 12 C6.5 11.1 11.1 6.5 12 0 Z"/>
+  </svg>
+</div>
 <div id="from"></div>
 <div id="intro">
   <button id="introBtn" type="button">🎵 별빛 아래에서 시작하기</button>
@@ -219,6 +282,16 @@ const CONFIG = {
     fadeIn: 2.4,         //    문장 하나가 서서히 나타나는 데 걸리는 시간
     lineGap: 2.6,        //    한 문장이 나타난 뒤 다음 문장이 나타나기까지의 간격
     sceneFade: 1.8       //    장면이 바뀔 때 이전 문장들이 사라지는 시간
+  },
+
+  starTwinkle: {         // ✨ 배경 별 반짝임 간격 (단위: 초). 이 범위의 랜덤 간격으로 하나씩 반짝여요
+    minGap: 5,           //    최소 간격
+    maxGap: 10            //    최대 간격
+  },
+
+  shootingStar: {        // 🌠 별똥별 간격 (단위: 초). 이 범위의 랜덤 간격으로 하나씩 떨어져요
+    minGap: 30,          //    최소 간격
+    maxGap: 50           //    최대 간격
   },
 
   scenes: [
@@ -263,7 +336,7 @@ const CONFIG = {
       lines: [
         "부담은 갖지 않으셨으면 해요.",
         "그냥, 서로가 어떤 사람인지",
-        "조금씩 알아가는 시간을 가져보면 어떨까 해요.",
+        { text: "조금씩 알아가는 시간을 가져보면 어떨까 해요.", small: true, nowrap: true },
         { text: "차 한 잔의 속도로, 천천히요.", small: true },
         { text: "편하게 마음 가는 데로 답해주세요.", small: true }
       ],
@@ -347,7 +420,8 @@ const CONFIG = {
     if (bgm.paused) bgm.play().catch(() => {});
   }
 
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  /* 기기 애니메이션 감소 설정(prefers-reduced-motion)이 캔버스 별빛 효과를 전부 차단하지 않도록 기본 동작 보장 */
+  const reduceMotion = false;
 
   let W = 0, H = 0, DPR = 1;
   let stars = [];
@@ -356,6 +430,7 @@ const CONFIG = {
   let sparkles = [];
   let shootingStars = [];
   let nextShootAt = 0;
+  let dust = [];              /* 마지막 연출: 문구가 흩어져 만든 모래 입자 */
 
   const mouse = { x: -9999, y: -9999, active: false };
 
@@ -408,6 +483,7 @@ const CONFIG = {
   function buildStars() {
     const count = Math.round((W * H) / 5200);
     stars = [];
+    flashingCount = 0;  /* 별을 새로 만들면 반짝임 카운터도 초기화 */
     for (let i = 0; i < count; i++) {
       stars.push({
         x: Math.random() * W,
@@ -416,6 +492,8 @@ const CONFIG = {
         base: rand(0.25, 0.9),
         phase: rand(0, Math.PI * 2),
         speed: rand(0.4, 1.4),
+        flash: 0,               // 반짝임 밝기 (sin 곡선: 0 → 1 → 0)
+        flashP: -1,             // 반짝임 진행도 (-1 = 쉬는 중, 0~1 = 진행 중)
         ox: 0, oy: 0            // 마우스 반응 오프셋
       });
     }
@@ -448,7 +526,7 @@ const CONFIG = {
   function setMouse(x, y) {
     mouse.x = x; mouse.y = y; mouse.active = true;
     /* 밤 장면: 손끝을 따라 반짝임을 흩뿌림 */
-    if (!reduceMotion && skyMix < 0.6 && Math.random() < 0.35) {
+    if (skyMix < 0.6 && Math.random() < 0.35) {
       sparkles.push({
         x: x + rand(-6, 6), y: y + rand(-6, 6),
         vx: rand(-0.3, 0.3), vy: rand(-0.55, -0.1),
@@ -489,15 +567,84 @@ const CONFIG = {
     }
   }
 
+  let prevStarT = 0;
+  let flashingCount = 0;      /* 동시에 반짝이는 별 수 (최대 MAX_FLASHING개) */
+  const MAX_FLASHING = 1;
+  /* 반짝임 간격: CONFIG.starTwinkle에서 조절 (기본 3~5초 사이 랜덤) */
+  const FLASH_GAP = {
+    min: CONFIG.starTwinkle?.minGap ?? 3,
+    max: CONFIG.starTwinkle?.maxGap ?? 5
+  };
+  let nextFlashAt = -1;       /* 다음 반짝임 예약 시각 (초) */
+
+  /* 가운데 문구 영역(여백 40px 포함) — 이 안의 별은 반짝임 대상에서 제외.
+     0.5초 캐시로 장면 전환을 따라가며 매 프레임 레이아웃 측정은 피함 */
+  let textZoneCache = null;
+  let textZoneAt = -1;
+  function textZone(t) {
+    if (t - textZoneAt < 0.5) return textZoneCache;
+    textZoneAt = t;
+    const lines = stage.querySelectorAll(".line");
+    if (!lines.length) { textZoneCache = null; return null; }
+    let l = Infinity, tp = Infinity, r = -Infinity, b = -Infinity;
+    lines.forEach((el) => {
+      const rc = el.getBoundingClientRect();
+      if (rc.left < l) l = rc.left;
+      if (rc.top < tp) tp = rc.top;
+      if (rc.right > r) r = rc.right;
+      if (rc.bottom > b) b = rc.bottom;
+    });
+    const pad = 40;
+    textZoneCache = { l: l - pad, t: tp - pad, r: r + pad, b: b + pad };
+    return textZoneCache;
+  }
+  function inTextZone(s, z) {
+    return z && s.x > z.l && s.x < z.r && s.y > z.t && s.y < z.b;
+  }
+
   function drawStars(t) {
     const fade = 1 - skyMix * 0.92;
+    const dt = Math.min(0.1, Math.max(0.001, t - prevStarT));
+    prevStarT = t;
     if (fade <= 0.02) return;
+
+    /* 배경 별 반짝임: CONFIG.starTwinkle 간격(기본 3~5초) 사이 랜덤 주기로 하나씩 — 동시 최대 2개 */
+    if (nextFlashAt < 0) nextFlashAt = t + rand(FLASH_GAP.min, FLASH_GAP.max);
+    if (stars.length && t >= nextFlashAt) {
+      if (flashingCount < MAX_FLASHING) {
+        /* 문구 영역 밖의 별이 나올 때까지 몇 번 다시 뽑기 */
+        const zone = textZone(t);
+        for (let tries = 0; tries < 15; tries++) {
+          const pick = stars[Math.floor(Math.random() * stars.length)];
+          if (pick.flashP >= 0 || inTextZone(pick, zone)) continue;
+          pick.flashP = 0;
+          flashingCount++;
+          break;
+        }
+      }
+      nextFlashAt = t + rand(FLASH_GAP.min, FLASH_GAP.max);
+    }
+
     for (const s of stars) {
-      const tw = reduceMotion ? 0.8 : 0.62 + 0.38 * Math.sin(t * s.speed + s.phase);
+      const tw = 0.62 + 0.38 * Math.sin(t * s.speed + s.phase);
       let a = s.base * tw * fade;
       let r = s.r;
 
-      /* 마우스 근접 → 별이 밝아지고 살짝 다가옴 */
+      /* 반짝임: 약 2.6초에 걸쳐 서서히 밝아졌다가 서서히 원래 밝기로 (sin 곡선) */
+      if (s.flashP >= 0) {
+        s.flashP += dt / 2.6;
+        if (s.flashP >= 1) {
+          s.flashP = -1;
+          s.flash = 0;
+          flashingCount = Math.max(0, flashingCount - 1);
+        } else {
+          s.flash = Math.sin(s.flashP * Math.PI);
+        }
+        a = Math.min(1, a + s.flash * 0.8 * fade);
+        r += s.flash * 1.2;
+      }
+
+      /* 마우스 근접 → 살짝 다가오고, 주변 별 중 일부만 이따금 반짝 */
       const dx = mouse.x - (s.x + s.ox);
       const dy = mouse.y - (s.y + s.oy);
       const d2 = dx * dx + dy * dy;
@@ -506,15 +653,43 @@ const CONFIG = {
       if (mouse.active && d2 < R * R) {
         const d = Math.sqrt(d2) || 1;
         const k = 1 - d / R;
-        a = Math.min(1, a + k * 0.85);
-        r = s.r + k * 1.6;
+        a = Math.min(1, a + k * 0.25);
+        r = Math.max(r, s.r + k * 0.6);
         tx = (dx / d) * k * 14;
         ty = (dy / d) * k * 14;
+        /* 가까울수록 조금 더 자주 — 동시 개수 제한과 문구 영역 제외는 동일하게 적용 */
+        if (s.flashP < 0 && flashingCount < MAX_FLASHING &&
+            Math.random() < dt * 0.08 * (0.3 + k) && !inTextZone(s, textZone(t))) {
+          s.flashP = 0;
+          flashingCount++;
+        }
       }
       s.ox += (tx - s.ox) * 0.06;
       s.oy += (ty - s.oy) * 0.06;
 
       const x = s.x + s.ox, y = s.y + s.oy;
+
+      /* 반짝임 광채: 후광 (최대 반경 12px, 중심 밝기 0.5) + 십자 빛줄기 */
+      if (s.flash > 0.005) {
+        const glow = s.flash * fade;
+        const gr = 3 + s.flash * 9; // 3 + 9 = 최대 12px
+        const gg = ctx.createRadialGradient(x, y, 0, x, y, gr);
+        gg.addColorStop(0, `rgba(255, 252, 240, ${(glow * 0.5).toFixed(3)})`);
+        gg.addColorStop(1, "rgba(255, 252, 240, 0)");
+        ctx.fillStyle = gg;
+        ctx.beginPath();
+        ctx.arc(x, y, gr, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = `rgba(255, 252, 240, ${(glow * 0.65).toFixed(3)})`;
+        ctx.lineWidth = 1;
+        const FL = 4 + s.flash * 8;
+        ctx.beginPath();
+        ctx.moveTo(x - FL, y); ctx.lineTo(x + FL, y);
+        ctx.moveTo(x, y - FL); ctx.lineTo(x, y + FL);
+        ctx.stroke();
+      }
+
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fillStyle = `rgba(255, 248, 231, ${a.toFixed(3)})`;
@@ -533,34 +708,75 @@ const CONFIG = {
     }
   }
 
+  /* 별똥별 간격: CONFIG.shootingStar에서 조절 (기본 10~30초 사이 랜덤) */
+  const SHOOT_GAP = {
+    min: CONFIG.shootingStar?.minGap ?? 10,
+    max: CONFIG.shootingStar?.maxGap ?? 30
+  };
+
   function spawnShootingStar(t) {
     shootingStars.push({
-      x: rand(W * 0.15, W * 0.9),
+      x: rand(W * 0.15, W * 0.85),
       y: rand(H * 0.05, H * 0.35),
-      vx: -rand(5, 8),
-      vy: rand(2.2, 3.6),
-      life: 1
+      /* 별똥별마다 속도·각도·수명이 미세하게 달라 실제처럼 보이도록 */
+      vx: -rand(2.1, 4.3),
+      vy: rand(0.9, 1.8),
+      fade: rand(0.007, 0.013),   /* 수명 감소 속도 → 이동 거리도 별마다 달라짐 */
+      life: 1,
+      maxLife: 1
     });
-    nextShootAt = t + rand(5, 11);
+    nextShootAt = t + rand(SHOOT_GAP.min, SHOOT_GAP.max);
   }
 
   function drawShootingStars(t) {
-    if (reduceMotion || skyMix > 0.4) return;
+    if (skyMix > 0.85) return;
     if (t > nextShootAt) spawnShootingStar(t);
+
+    const skyFade = Math.max(0, 1 - skyMix * 0.7);
+
     for (let i = shootingStars.length - 1; i >= 0; i--) {
       const s = shootingStars[i];
-      s.x += s.vx; s.y += s.vy; s.life -= 0.016;
+      s.x += s.vx; s.y += s.vy; s.life -= (s.fade || 0.010);
       if (s.life <= 0) { shootingStars.splice(i, 1); continue; }
-      const tail = 16;
-      const g = ctx.createLinearGradient(s.x, s.y, s.x - s.vx * tail, s.y - s.vy * tail);
-      g.addColorStop(0, `rgba(255, 250, 235, ${0.9 * s.life})`);
-      g.addColorStop(1, "rgba(255, 250, 235, 0)");
-      ctx.strokeStyle = g;
-      ctx.lineWidth = 1.4;
+
+      const lifeRatio = s.life / (s.maxLife || 1);
+      const opacity = Math.sin(lifeRatio * Math.PI) * skyFade;
+
+      const tail = 24;
+      const tailX = s.x - s.vx * tail;
+      const tailY = s.y - s.vy * tail;
+
+      /* 은은한 외곽 빛선 */
+      const gOuter = ctx.createLinearGradient(s.x, s.y, tailX, tailY);
+      gOuter.addColorStop(0, `rgba(255, 235, 190, ${(0.55 * opacity).toFixed(3)})`);
+      gOuter.addColorStop(1, "rgba(255, 235, 190, 0)");
+      ctx.strokeStyle = gOuter;
+      ctx.lineWidth = 3.5;
       ctx.beginPath();
       ctx.moveTo(s.x, s.y);
-      ctx.lineTo(s.x - s.vx * tail, s.y - s.vy * tail);
+      ctx.lineTo(tailX, tailY);
       ctx.stroke();
+
+      /* 또렷한 핵심 꼬리선 */
+      const gCore = ctx.createLinearGradient(s.x, s.y, tailX, tailY);
+      gCore.addColorStop(0, `rgba(255, 255, 250, ${(0.95 * opacity).toFixed(3)})`);
+      gCore.addColorStop(1, "rgba(255, 255, 250, 0)");
+      ctx.strokeStyle = gCore;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(tailX, tailY);
+      ctx.stroke();
+
+      /* 반짝이는 별똥별 머리 점 */
+      const headGlow = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 6);
+      headGlow.addColorStop(0, `rgba(255, 255, 255, ${(1.0 * opacity).toFixed(3)})`);
+      headGlow.addColorStop(0.5, `rgba(255, 236, 190, ${(0.6 * opacity).toFixed(3)})`);
+      headGlow.addColorStop(1, "rgba(255, 236, 190, 0)");
+      ctx.fillStyle = headGlow;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, 6, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 
@@ -704,6 +920,110 @@ const CONFIG = {
     }
   }
 
+  /* ---------- 문구 흩날림 (바람에 날리는 모래처럼) ---------- */
+  let dispersed = false;
+
+  function disperseText() {
+    if (dispersed) return;
+    dispersed = true;
+
+    const els = [...stage.querySelectorAll(".line"), fromEl].filter(
+      (el) => el && el.textContent
+    );
+
+    /* 화면과 같은 크기의 오프스크린 캔버스에 문구를 같은 위치·폰트로 그려 픽셀 추출 */
+    const off = document.createElement("canvas");
+    off.width = W;
+    off.height = H;
+    const octx = off.getContext("2d");
+    octx.textAlign = "center";
+    octx.textBaseline = "middle";
+
+    els.forEach((el) => {
+      const cs = getComputedStyle(el);
+      const rect = el.getBoundingClientRect();
+      octx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      octx.fillStyle = cs.color;
+      const lineH = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.6;
+      /* 좁은 화면에서 줄바꿈된 문장도 원래 배치대로: 간단한 워드랩 */
+      const words = el.textContent.split(" ");
+      const rows = [];
+      let cur = "";
+      words.forEach((wd) => {
+        const test = cur ? cur + " " + wd : wd;
+        if (cur && octx.measureText(test).width > rect.width + 2) {
+          rows.push(cur);
+          cur = wd;
+        } else {
+          cur = test;
+        }
+      });
+      if (cur) rows.push(cur);
+      const cx0 = rect.left + rect.width / 2;
+      const y0 = rect.top + rect.height / 2 - ((rows.length - 1) * lineH) / 2;
+      rows.forEach((row, ri) => octx.fillText(row, cx0, y0 + ri * lineH));
+    });
+
+    /* 글자 픽셀 → 모래 입자 */
+    const img = octx.getImageData(0, 0, W, H).data;
+    const step = 3;
+    for (let py = 0; py < H; py += step) {
+      for (let px = 0; px < W; px += step) {
+        const i = (py * W + px) * 4;
+        if (img[i + 3] > 90) {
+          dust.push({
+            x: px, y: py,
+            vx: 0, vy: 0,
+            rgb: `${img[i]},${img[i + 1]},${img[i + 2]}`,
+            a: img[i + 3] / 255,
+            life: 1,
+            decay: rand(0.22, 0.45),          /* 초당 소멸 속도 → 약 2~4.5초 생존 */
+            size: rand(1, 1.9),
+            sway: rand(0, Math.PI * 2),
+            age: 0,
+            appearAt: rand(0, 1.6),           /* 알갱이마다 무작위 순서로 서서히 맺힘 */
+            windAt: 2.8 + (px / W) * 1.6 + rand(0, 0.5)  /* 다 맺힌 뒤, 왼쪽부터 바람 */
+          });
+        }
+      }
+    }
+
+    /* DOM 문구는 입자가 맺히는 동안 천천히 옅어지며 교체 (크로스페이드) */
+    els.forEach((el) => {
+      el.style.transition = "opacity 2.6s ease";
+      el.style.opacity = "0";
+    });
+  }
+
+  let prevDustT = 0;
+  function drawDust(t) {
+    const dt = Math.min(0.05, Math.max(0.001, t - prevDustT));
+    prevDustT = t;
+    if (!dust.length) return;
+    for (let i = dust.length - 1; i >= 0; i--) {
+      const p = dust[i];
+      p.age += dt;
+      if (p.age < p.windAt) {
+        /* 1단계: 글자가 옅어지는 동안 알갱이가 0.9초에 걸쳐 서서히 맺힘 */
+        const appear = Math.min(1, Math.max(0, (p.age - p.appearAt) / 0.9));
+        if (appear > 0) {
+          ctx.fillStyle = `rgba(${p.rgb},${(p.a * appear).toFixed(3)})`;
+          ctx.fillRect(p.x, p.y, p.size, p.size);
+        }
+        continue;
+      }
+      /* 바람: 꽃잎과 같은 방향(오른쪽)으로, 흔들리며 떠올라 흩어짐 */
+      p.vx += (30 + Math.sin(t * 0.9 + p.sway) * 16) * dt;
+      p.vy += (Math.sin(t * 1.5 + p.sway) * 14 - 7) * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.life -= p.decay * dt;
+      if (p.life <= 0 || p.x > W + 30) { dust.splice(i, 1); continue; }
+      ctx.fillStyle = `rgba(${p.rgb},${(p.a * p.life).toFixed(3)})`;
+      ctx.fillRect(p.x, p.y, p.size, p.size);
+    }
+  }
+
   /* ---------- 루프 ---------- */
   let start = performance.now();
   function frame(now) {
@@ -718,6 +1038,7 @@ const CONFIG = {
     drawSparkles();
     drawDriftPetals(t);
     updateFlowers(t);
+    drawDust(t);
 
     requestAnimationFrame(frame);
   }
@@ -737,9 +1058,71 @@ const CONFIG = {
     sceneFade: (CONFIG.timing?.sceneFade ?? 1.4) * 1000
   };
 
+  /* 서명을 마지막 문구(또는 선택 버튼) 아래 일정 간격에 배치.
+     오른쪽 끝은 문장 블록의 오른쪽 가장자리에 맞춰 편지 서명처럼 보이게.
+     화면 밖으로 나가면 기존 우측 하단 고정으로 폴백 */
+  function positionFromBelowLines() {
+    const last = stage.lastElementChild;
+    if (!last) return;
+    const top = last.getBoundingClientRect().bottom + 36;
+    if (top > window.innerHeight - 40) {
+      fromEl.style.top = "";
+      fromEl.style.right = "";
+      fromEl.style.bottom = "";
+      return;
+    }
+    let rightEdge = 0;
+    stage.querySelectorAll(".line").forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.right > rightEdge) rightEdge = r.right;
+    });
+    fromEl.style.top = top + "px";
+    fromEl.style.bottom = "auto";
+    fromEl.style.right = Math.max(24, window.innerWidth - rightEdge) + "px";
+  }
+
+  /* 힌트를 마지막 문장 아래 일정 간격에 배치 (화면 밖으로 나가면 하단 고정으로 폴백) */
+  function positionHintBelowLines() {
+    const lines = stage.querySelectorAll(".line");
+    const last = lines[lines.length - 1];
+    if (!last) return;
+    /* 아이콘 박스(56px) 안 별이 중앙에 있으므로, 별 중심이 문장 아래 ~48px에 오도록 */
+    const top = last.getBoundingClientRect().bottom + 20;
+    if (top > window.innerHeight - 64) {
+      hint.style.top = "";
+      hint.style.bottom = "";
+    } else {
+      hint.style.top = top + "px";
+      hint.style.bottom = "auto";
+    }
+  }
+  window.addEventListener("resize", () => {
+    if (!hint.classList.contains("hidden")) positionHintBelowLines();
+    if (fromEl.classList.contains("show")) positionFromBelowLines();
+  });
+
+  /* nowrap 문장이 화면보다 넓으면 글자 크기를 줄여 한 줄 유지 */
+  function fitNowrapLines() {
+    const avail = window.innerWidth * 0.9;
+    stage.querySelectorAll(".line.nowrap").forEach((el) => {
+      el.style.fontSize = "";
+      const w = el.scrollWidth;
+      if (w > avail) {
+        const cur = parseFloat(getComputedStyle(el).fontSize);
+        el.style.fontSize = Math.max(12, cur * avail / w).toFixed(1) + "px";
+      }
+    });
+  }
+  window.addEventListener("resize", fitNowrapLines);
+
   function makeLine(item) {
     const div = document.createElement("div");
-    div.className = "line" + (item && item.small ? " small" : "");
+    /* 주의: 문자열에도 내장 String.prototype.small이 있어 item.small이 항상 참이 됨.
+       그동안 일반 문자열 문장이 전부 small로 렌더링되어 온 것이 현재의 화면 톤이므로,
+       그 모습을 유지하기 위해 문자열은 의도적으로 small 취급한다. */
+    const isSmall = typeof item === "string" ? true : !!item.small;
+    const isNowrap = typeof item === "object" && !!item.nowrap;
+    div.className = "line" + (isSmall ? " small" : "") + (isNowrap ? " nowrap" : "");
     div.textContent = typeof item === "string" ? item : item.text;
     div.style.transitionDuration = T.fadeIn + "ms";
     return div;
@@ -750,6 +1133,7 @@ const CONFIG = {
     if (!scene) return;
     advancing = true;
     skyTarget = scene.sky;
+    hint.classList.add("hidden");
 
     /* 이전 문장 서서히 사라짐 */
     [...stage.children].forEach((el) => el.classList.remove("show"));
@@ -757,6 +1141,7 @@ const CONFIG = {
       stage.innerHTML = "";
       const els = scene.lines.map(makeLine);
       els.forEach((el) => stage.appendChild(el));
+      fitNowrapLines();
 
       let choicesEl = null;
       if (scene.final && CONFIG.showChoices) {
@@ -785,12 +1170,21 @@ const CONFIG = {
       setTimeout(() => {
         advancing = false;
         if (scene.final) {
-          hint.style.opacity = "0";
+          /* 마지막 장면: 힌트는 계속 숨김 */
           if (choicesEl) choicesEl.classList.add("show");
           if (CONFIG.fromName) {
             fromEl.textContent = CONFIG.fromName;
+            positionFromBelowLines();
             fromEl.classList.add("show");
           }
+          /* 서명까지 다 보이고 잠시 여운 뒤, 문구들이 모래처럼 흩어짐 */
+          if (!CONFIG.showChoices) {
+            setTimeout(disperseText, 9000);
+          }
+        } else {
+          /* 모든 문장이 나타난 뒤, 마지막 문장 아래에 힌트 표시 */
+          positionHintBelowLines();
+          hint.classList.remove("hidden");
         }
       }, doneAt);
     }, sceneIndex === 0 && idx === 0 ? 0 : T.sceneFade);
@@ -804,6 +1198,7 @@ const CONFIG = {
       const all = [...lines, CONFIG.closing];
       const els = all.map(makeLine);
       els.forEach((el) => stage.appendChild(el));
+      fitNowrapLines();
       els.forEach((el, i) => {
         setTimeout(() => el.classList.add("show"), 300 + i * T.lineGap);
       });
@@ -822,6 +1217,7 @@ const CONFIG = {
   }
 
   stage.addEventListener("click", advance);
+  hint.addEventListener("click", advance); /* 별 아이콘을 눌러도 다음으로 */
   window.addEventListener("keydown", (e) => {
     if (e.key === " " || e.key === "Enter" || e.key === "ArrowRight") advance();
   });
@@ -839,6 +1235,9 @@ const CONFIG = {
     startBgm();
     intro.classList.add("hide");
     hint.style.display = "";
+    /* 시작 버튼 클릭 후 ~1.5초 뒤 첫 별똥별이 떨어지도록 타이머 설정 */
+    const currentT = (performance.now() - start) / 1000;
+    nextShootAt = currentT + rand(1.2, 2.2);
     setTimeout(advance, 600);
   }, { once: true });
 })();
