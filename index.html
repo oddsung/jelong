@@ -241,10 +241,40 @@
     outline: 2px solid var(--accent);
     outline-offset: 3px;
   }
+  /* 🏃 도망가는 시작 버튼: 손끝이 가까워지면 미끄러지듯 빠져나갑니다 */
+  #introBtn {
+    will-change: transform;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #introBtn.dodging {
+    /* 쫓아오는 손끝에서 부드럽게 미끄러져 나가는 감쇠 곡선 */
+    transition: transform 0.62s cubic-bezier(0.16, 1, 0.3, 1),
+                background 0.5s ease, border-color 0.5s ease;
+    animation: none;
+    opacity: 1;
+  }
+  #intro.chase { touch-action: none; }
+  #introTaunt {
+    position: absolute;
+    left: 50%;
+    bottom: 12%;
+    transform: translateX(-50%);
+    color: var(--ink-dim);
+    font-size: clamp(13px, 3.4vw, 15px);
+    letter-spacing: 0.12em;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.6s ease;
+  }
+  #introTaunt.show { opacity: 0.85; }
   @media (prefers-reduced-motion: reduce) {
     .line, #choices { transition-duration: 0.4s; }
     #hint .tap-star { animation: none; opacity: 0.85; }
     #hint .tap-ripple { animation: none; opacity: 0.25; transform: scale(0.8); }
+    #introBtn.dodging { transition-duration: 0.28s; }
   }
 </style>
 </head>
@@ -263,6 +293,7 @@
 <div id="from"></div>
 <div id="intro">
   <button id="introBtn" type="button">🎵 별빛 아래에서 시작하기</button>
+  <div id="introTaunt" aria-live="polite"></div>
   <!-- <p>이어폰을 끼면 더 좋아요</p> -->
 </div>
 
@@ -282,6 +313,21 @@ const CONFIG = {
     fadeIn: 2.0,         //    문장 하나가 서서히 나타나는 데 걸리는 시간
     lineGap: 2.0,        //    한 문장이 나타난 뒤 다음 문장이 나타나기까지의 간격
     sceneFade: 1.8       //    장면이 바뀔 때 이전 문장들이 사라지는 시간
+  },
+
+  introDodge: {           // 🏃 시작 버튼이 도망가는 장난
+    enabled: true,        //    false로 바꾸면 평범하게 눌립니다
+    radius: 130,          //    커서·손끝이 이 거리(px)까지 다가오면 달아나요
+    distance: 180,        //    한 번에 미끄러져 빠져나가는 거리(px)
+    catchAfter: 0,        //    이만큼 도망친 뒤 잡혀서 눌립니다 (0 = 끝까지 못 누름)
+    taunts: [             //    달아날 때 아래에 번갈아 떠오르는 문구 ([]로 비우면 안 나와요)
+      "앗, 잡히면 안 되는데",
+      "조금 더 빨라야 해요",
+      "후후, 아직이에요",
+      "이쪽이에요, 금순이님",
+      "꽤 끈질기시네요"
+    ],
+    caughtText: "...잡혔네요. 그럼, 시작할까요?"  // catchAfter에 도달해 잡힌 순간의 문구
   },
 
   starTwinkle: {         // ✨ 배경 별 반짝임 간격 (단위: 초). 이 범위의 랜덤 간격으로 하나씩 반짝여요
@@ -1049,6 +1095,7 @@ const CONFIG = {
   let sceneIndex = -1;
   let advancing = false;
   let finished = false;
+  let started = false;     /* 시작 버튼을 실제로 잡아서 눌렀는지 */
 
   /* CONFIG.timing(초)을 ms로 변환. 기기의 '애니메이션 줄이기' 설정과
      무관하게 항상 설정값 그대로 동작하도록 고정 */
@@ -1219,6 +1266,8 @@ const CONFIG = {
   stage.addEventListener("click", advance);
   hint.addEventListener("click", advance); /* 별 아이콘을 눌러도 다음으로 */
   window.addEventListener("keydown", (e) => {
+    /* 시작 전에는 키보드로도 넘어갈 수 없게 (오버레이 뒤로 몰래 시작되는 것 방지) */
+    if (!started) return;
     if (e.key === " " || e.key === "Enter" || e.key === "ArrowRight") advance();
   });
 
@@ -1230,8 +1279,11 @@ const CONFIG = {
   /* 시작 버튼: 음악과 함께 첫 장면을 엽니다 */
   const intro = document.getElementById("intro");
   const introBtn = document.getElementById("introBtn");
-  introBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
+  const introTaunt = document.getElementById("introTaunt");
+
+  function beginStory() {
+    if (started) return;
+    started = true;
     startBgm();
     intro.classList.add("hide");
     hint.style.display = "";
@@ -1239,7 +1291,185 @@ const CONFIG = {
     const currentT = (performance.now() - start) / 1000;
     nextShootAt = currentT + rand(1.2, 2.2);
     setTimeout(advance, 600);
-  }, { once: true });
+  }
+
+  /* =====================================================================
+     🏃 도망가는 시작 버튼
+     커서나 손끝이 가까워지면 버튼이 반대쪽으로 미끄러져 빠져나갑니다.
+     CONFIG.introDodge.catchAfter가 0이면 끝까지 잡히지 않습니다.
+     ===================================================================== */
+  const DG = {
+    enabled: CONFIG.introDodge?.enabled !== false,
+    radius: CONFIG.introDodge?.radius ?? 130,
+    distance: CONFIG.introDodge?.distance ?? 180,
+    catchAfter: CONFIG.introDodge?.catchAfter ?? 0,
+    taunts: CONFIG.introDodge?.taunts ?? [],
+    caughtText: CONFIG.introDodge?.caughtText ?? ""
+  };
+  let dodgeCount = 0;
+  let tx = 0, ty = 0;              /* 원래 위치에서 밀려난 오프셋 */
+  let lastDodgeAt = -1e9;
+  let tauntIdx = -1;
+  let tauntTimer = 0;
+
+  /* 아직 못 잡는 상태인지. catchAfter가 0이면 영원히 참 */
+  function dodging() {
+    if (!DG.enabled) return false;
+    if (DG.catchAfter > 0 && dodgeCount >= DG.catchAfter) return false;
+    return true;
+  }
+
+  const clampTo = (v, lo, hi) => (lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v)));
+
+  /* 변형(transform)을 뺀, 레이아웃 그대로의 버튼 중심과 크기.
+     미끄러지는 중의 getBoundingClientRect는 '지금 지나가는 중'의 위치를 주므로
+     거기서 tx를 빼면 값이 틀어진다. 그래서 transform을 잠시 걷어내고 한 번 재어 캐시한다. */
+  let baseBox = null;
+  function measureBase() {
+    const keep = introBtn.style.transform;
+    introBtn.style.transition = "none";
+    introBtn.style.transform = "none";
+    const r = introBtn.getBoundingClientRect();
+    baseBox = { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height };
+    introBtn.style.transform = keep;
+    void introBtn.offsetWidth;        /* 되돌린 위치를 즉시 반영해 깜빡임 방지 */
+    introBtn.style.transition = "";
+  }
+  function btnBase() {
+    if (!baseBox) measureBase();
+    return baseBox;
+  }
+  /* 미끄러지는 중에도 '지금 눈에 보이는' 중심 */
+  function btnNow() {
+    const r = introBtn.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+
+  function moveBtn(nx, ny) {
+    tx = nx; ty = ny;
+    introBtn.classList.add("dodging");
+    introBtn.style.transform = "translate(" + tx.toFixed(1) + "px, " + ty.toFixed(1) + "px)";
+  }
+
+  function showTaunt(text) {
+    if (!introTaunt) return;
+    if (text === undefined) {
+      if (!DG.taunts.length) return;
+      tauntIdx = (tauntIdx + 1) % DG.taunts.length;
+      text = DG.taunts[tauntIdx];
+    }
+    if (!text) return;
+    introTaunt.textContent = text;
+    introTaunt.classList.add("show");
+    clearTimeout(tauntTimer);
+    tauntTimer = setTimeout(() => introTaunt.classList.remove("show"), 2200);
+  }
+
+  /* 손끝(px, py)에서 멀어지는 방향으로 한 걸음 달아남.
+     좌표가 없으면(키보드 등) 아무 방향으로 흠칫 피함 */
+  function dodge(px, py) {
+    const base = btnBase();
+    const cur = btnNow();
+    if (px === undefined || py === undefined || (px === 0 && py === 0)) {
+      const a = rand(0, Math.PI * 2);
+      px = cur.x - Math.cos(a) * DG.radius;
+      py = cur.y - Math.sin(a) * DG.radius;
+    }
+    const now = performance.now();
+    if (now - lastDodgeAt < 130) return;   /* 연속 이동이 겹쳐 튀는 것 방지 */
+    lastDodgeAt = now;
+
+    const margin = 16;
+    const halfW = base.w / 2, halfH = base.h / 2;
+    const minX = margin + halfW - base.x;
+    const maxX = window.innerWidth - margin - halfW - base.x;
+    const minY = margin + halfH - base.y;
+    const maxY = window.innerHeight - margin - halfH - base.y;
+
+    let dx = cur.x - px;
+    let dy = cur.y - py;
+    if (Math.hypot(dx, dy) < 1) { const a = rand(0, Math.PI * 2); dx = Math.cos(a); dy = Math.sin(a); }
+    /* 멀어지는 방향에 약간의 무작위 각도를 섞어 예측하기 어렵게 */
+    const away = Math.atan2(dy, dx) + rand(-0.45, 0.45);
+
+    /* 화면 안에 머물면서 손끝에서 충분히 멀어지는 각도를 돌려가며 찾음 */
+    let found = false, nx = tx, ny = ty;
+    for (let i = 0; i < 12; i++) {
+      const a = away + i * (Math.PI / 6) * (i % 2 ? 1 : -1);
+      const cx = clampTo(tx + Math.cos(a) * DG.distance, minX, maxX);
+      const cy = clampTo(ty + Math.sin(a) * DG.distance, minY, maxY);
+      if (Math.hypot(base.x + cx - px, base.y + cy - py) > DG.radius * 1.2) {
+        nx = cx; ny = cy; found = true; break;
+      }
+    }
+    if (!found) {
+      /* 구석에 몰렸으면 손끝 반대편 화면으로 한 번에 건너뜀 */
+      nx = clampTo(px < window.innerWidth / 2 ? maxX : minX, minX, maxX);
+      ny = clampTo(rand(minY, maxY), minY, maxY);
+    }
+
+    moveBtn(nx, ny);
+    dodgeCount++;
+
+    if (dodging()) {
+      showTaunt();
+    } else {
+      /* catchAfter에 도달: 제자리로 돌아와 순하게 잡힘 */
+      moveBtn(0, 0);
+      showTaunt(DG.caughtText);
+    }
+  }
+
+  /* 포인터가 버튼 테두리에서 얼마나 떨어져 있는지 */
+  function distToBtn(px, py) {
+    const r = introBtn.getBoundingClientRect();
+    const cx = Math.min(r.right, Math.max(r.left, px));
+    const cy = Math.min(r.bottom, Math.max(r.top, py));
+    return Math.hypot(px - cx, py - cy);
+  }
+
+  if (DG.enabled) {
+    intro.classList.add("chase");
+
+    /* 마우스: 다가오기만 해도 미리 달아남 */
+    intro.addEventListener("pointermove", (e) => {
+      if (!dodging()) return;
+      if (distToBtn(e.clientX, e.clientY) < DG.radius) dodge(e.clientX, e.clientY);
+    }, { passive: true });
+
+    /* 터치: 호버가 없으니 누르는 순간 빠져나가고, 클릭은 성립시키지 않음 */
+    introBtn.addEventListener("pointerdown", (e) => {
+      if (!dodging()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dodge(e.clientX, e.clientY);
+    });
+
+    /* 버튼 주변을 눌러도 흠칫 피함 */
+    intro.addEventListener("pointerdown", (e) => {
+      if (!dodging()) return;
+      if (distToBtn(e.clientX, e.clientY) < DG.radius * 1.6) dodge(e.clientX, e.clientY);
+    });
+
+    /* 창 크기가 바뀌면 기준 위치를 다시 재고, 화면 밖으로 나가지 않도록 가둠 */
+    window.addEventListener("resize", () => {
+      measureBase();
+      if (!tx && !ty) return;
+      const base = baseBox;
+      const margin = 16, halfW = base.w / 2, halfH = base.h / 2;
+      moveBtn(
+        clampTo(tx, margin + halfW - base.x, window.innerWidth - margin - halfW - base.x),
+        clampTo(ty, margin + halfH - base.y, window.innerHeight - margin - halfH - base.y)
+      );
+    });
+  }
+
+  introBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    /* 아직 도망 중이면 눌려도 시작되지 않음 (키보드 Enter·Space 포함) */
+    if (dodging()) { dodge(e.clientX, e.clientY); return; }
+    beginStory();
+  });
 })();
 </script>
 </body>
